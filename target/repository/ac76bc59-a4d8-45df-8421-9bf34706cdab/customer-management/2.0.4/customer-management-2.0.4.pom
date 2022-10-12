@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>ac76bc59-a4d8-45df-8421-9bf34706cdab</groupId>
+  <artifactId>customer-management</artifactId>
+  <version>2.0.4</version>
+  <name>customer-management</name>
+  <properties>
+    <classifier>raml</classifier>
+    <main>customer-management.raml</main>
+    <status>published</status>
+    <originalFormatVersion>1.0</originalFormatVersion>
+    <apiVersion>1.0</apiVersion>
+    <projectId>8ed616a8-c6a4-48f7-adb3-a2ed99709463</projectId>
+    <branchId>master</branchId>
+    <commitId>877899c13584e2e43914cbb8264741f8223342af</commitId>
+    <keywords/>
+    <type>rest-api</type>
+    <mainFile>customer-management.raml</mainFile>
+  </properties>
+  <repositories>
+    <repository>
+      <id>anypoint-exchange</id>
+      <url>https://maven.anypoint.mulesoft.com/api/v3/maven</url>
+    </repository>
+  </repositories>
+</project>

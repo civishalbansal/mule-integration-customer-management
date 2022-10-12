@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<file:config name="File_Config" doc:name="File Config" doc:id="86efe65a-d85c-42d2-8d50-f45dd749d584" >
+		<file:connection workingDir="#[vars.fileInformation.fileDestination]" />
+	</file:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="8a4aaef4-2169-4d6e-87e4-7d01dac134e6" file="config.properties" />
+	<sub-flow name="set-fileInformation" doc:id="82b5466f-aeb9-492d-ba65-42bac3105aa2" >
+	<ee:transform doc:name="set fileInformation" doc:id="17fcc9d9-2426-4e20-9137-f08a39c8b926">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="fileInformation"><![CDATA[%dw 2.0
+output application/java
+
+var env = attributes.queryParams.instance
+---
+{
+	fileDestination: if(env == 'test') (p('sftp.path.test'))
+					else if(env == 'prod') (p('sftp.path.prod'))
+					else (p('sftp.path.default')),
+
+	fileName: if(env == 'test') (p('sftp.filename.test'))
+					else if(env == 'prod') (p('sftp.filename.prod'))
+					else (p('sftp.filename.default'))
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform></sub-flow>
+	<flow name="insert-client" doc:id="0ae2ff93-e08d-4d1f-91e2-1d5b386e75f7" >
+		<ee:transform doc:name="generate fileContent" doc:id="680fc044-cd9d-40f9-84fe-b5aa8978057f" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileContent" ><![CDATA[%dw 2.0
+import * from dw::core::Strings
+import * from dw::core::Numbers
+output application/json
+---
+{
+	"Client Key": substringBefore((random()*1000000),"."),
+	"First Name": payload.'First Name',
+	"Middle Name": payload.'Middle Name',
+	"Last Name": payload.'Last Name',
+	"Birth Date": payload.'Birth Date',
+	"Height": payload.Height,
+	"Weight": payload.Weight,
+	"Billing Street": payload.'Billing Street',
+	"Billing City": payload.'Billing City',
+	"Billing State": payload.'Billing State',
+	"Billing Postal Code": payload.'Billing Postal Code',
+	"Billing Country": payload.'Billing Country',
+	"Created Date": now() as Number
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="generate fileInput" doc:id="db4bfbd4-9861-4587-9ee1-2e0a932e14bf" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileInput" ><![CDATA[%dw 2.0
+output application/csv
+---
+vars.fileContent]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<try doc:name="Try" doc:id="49f0bbec-f085-4f23-b39f-3b67449c6993" >
+			<file:create-directory doc:name="Create directory" doc:id="7aef6116-772c-4bd6-b4e1-04deae106b32" directoryPath="#[vars.fileInformation.fileDestination]" />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="69087851-08d7-49f5-9e07-88fb02326854" type="FILE:FILE_ALREADY_EXISTS">
+					<logger level="INFO" doc:name="Logger" doc:id="e8631d02-5761-498a-bb00-2523635fffbc" message="Directory already exists"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<file:list doc:name="List" doc:id="3bc939f6-c4d4-423d-b350-50ac144eda34" directoryPath="#[vars.fileInformation.fileDestination]" target="listvar">
+			<file:matcher filenamePattern="*.{csv}" />
+		</file:list>
+
+		<choice doc:name="Choice" doc:id="890d5df0-3702-4e21-b920-5f42dfe14804" >
+			<when expression="#[!isEmpty(vars.listvar.attributes.name)]">
+				<file:read doc:name="Read file" doc:id="51cdf4b1-0f0e-42d3-b291-ddc384224f68" config-ref="File_Config" path="#[vars.listvar.attributes.name[0]]"/>
+				<ee:transform doc:name="generate fileInput" doc:id="c3dce491-faee-4684-b707-5179806093c0" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="fileInput" ><![CDATA[%dw 2.0
+output application/csv
+---
+if(!isEmpty(vars.fileInput))
+	payload ++ vars.fileInput
+else
+	vars.fileInput
+]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="b8b25acb-8272-45f6-84e9-3fd092cbc84c" />
+			</when>
+		</choice>
+		<file:write doc:name="Write file" doc:id="11501ef0-01da-4bec-8476-8b61e7c3421b" config-ref="File_Config" path="#[vars.fileInformation.fileDestination ++ vars.fileInformation.fileName]">
+			<file:content ><![CDATA[#[vars.fileInput]]]></file:content>
+		</file:write>
+		<ee:transform doc:name="generate response" doc:id="d3505b6e-6d1f-4281-8aa1-c404dc51e0f7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Response":"Client inserted successfully in record file with client key " ++ vars.fileContent."Client Key"
+}
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+	</flow>
+	<flow name="read-client" doc:id="cb7bb2bd-a756-433d-b63a-58e3c1360e98" >
+		<file:read doc:name="Read File" doc:id="665d8df6-b7d5-4e1d-adda-5ca6961f0252" config-ref="File_Config" outputMimeType="application/csv" path="#[vars.fileInformation.fileDestination ++ vars.fileInformation.fileName]"/>
+		<choice doc:name="Choice" doc:id="52278138-2fb2-4b37-9f7b-823f3b7ea1e2" >
+			<when expression="#[output application/json&#10;---&#10;sizeOf(payload) == 0]">
+				<ee:transform doc:name="generate errorResponse" doc:id="08c1f737-5b1d-4981-9ea4-ab8f720cef00" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "There were no records found in the file"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="generate response" doc:id="45775902-aacc-440f-9457-598ee3040e49">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+(payload map (item) -> {
+	"Client Key": item."Client Key",
+	"First Name": item."First Name",
+    "Middle Name": item."Middle Name",
+    "Last Name": item."Last Name",
+    "BirthDate": item."BirthDate",
+    "Height": item."Height",
+    "Weight": item."Weight",
+    "Billing Address": item."Billing Street" ++ " " ++ item."Billing City" ++ " " ++ item."Billing State" ++ " " ++ item."Billing Postal Code" ++ " " ++ item."Billing Country",
+    "Created Date":item."Created Date"
+}) + {count : sizeOf(payload)}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="009943a5-67d1-4fd2-a3a9-b2da3329c243" type="FILE:ILLEGAL_PATH">
+				<ee:transform doc:name="generate errorResponse" doc:id="61dd5e72-4fa0-4e3b-acef-bc05a2314b87" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[output application/json
+---
+{
+	"message" : (error.description replace "Path" with "File" ) replace (vars.fileInformation.fileDestination) with ''
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="delete-client" doc:id="c70e2f56-a31e-4682-b9f5-10fa436ce748" >
+		<set-variable value="#[attributes.queryParams.clientKey]" doc:name="Set clientKey" doc:id="447ee93f-fcbd-45e4-a41a-58c8f4a222a6" variableName="clientKey"/>
+		<file:list
+		doc:name="List"
+		doc:id="3418a48d-e3bb-40bf-93d5-2f9308e17449"
+		config-ref="File_Config"
+		directoryPath="#[vars.fileInformation.fileDestination]"
+		 target="listvar">
+			<file:matcher filenamePattern='*.{csv}'/>
+		</file:list>
+		<choice doc:name="Choice" doc:id="9b617e18-5626-4c88-a5f4-4c6426be086c" >
+			<when expression="#[!isEmpty(vars.listvar.attributes.name)]">
+				<file:read doc:name="Read" doc:id="ccc6e8c5-45c7-4574-aae6-3a469a04566c" config-ref="File_Config" path="#[vars.listvar.attributes.name[0]]"/>
+				<ee:transform doc:name="delRec" doc:id="55a27a38-393b-4b9b-a2f4-97816a3111eb">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="delRec" ><![CDATA[%dw 2.0
+output application/csv
+---
+if(!isEmpty(payload))
+  payload filter ($."Client Key" == vars.clientKey)
+else
+	payload filter (false)]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<ee:transform doc:name="generate fileInput" doc:id="28f9ba85-6019-407a-b600-c5ef89bab154" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+---
+if ( !isEmpty(payload) and !isEmpty(vars.delRec) ) payload -- vars.delRec
+else
+	payload
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<choice doc:name="Choice" doc:id="f6a17e37-c556-46d2-8886-6d5f95f13e3a">
+					<when expression="#[isEmpty(vars.delRec)]">
+						<ee:transform doc:name="generate errorResponse" doc:id="ba3c6093-40aa-4a77-8ea3-2b6fc26aa6ee" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+		message: "Client Key '" ++ vars.clientKey ++ "' does not exist. Please provide a valid Client Key to delete."
+	}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<file:write doc:name="Write" doc:id="89f77a53-fb6e-4b1d-8b41-7feccc10ce47" config-ref="File_Config" path="#[vars.fileInformation.fileDestination ++ vars.fileInformation.fileName]">
+		</file:write>
+						<ee:transform doc:name="generate response" doc:id="5e1c7fda-d401-49f4-b33f-3d1a1f17b205" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+		message: "Client Key '" ++ vars.clientKey ++ "' deleted succesfully."
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Raise error" doc:id="c332fcf5-2db0-45a1-aa21-b7807a27a8de" type="FILE:NOT_PRESENT" description="The csv file is not present"/>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

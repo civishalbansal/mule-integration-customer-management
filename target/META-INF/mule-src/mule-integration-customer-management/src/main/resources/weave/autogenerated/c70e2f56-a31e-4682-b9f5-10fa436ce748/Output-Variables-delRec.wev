@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_c70e2f56_a31e_4682_b9f5_10fa436ce748_Output_Variables_delRec = Any
+
